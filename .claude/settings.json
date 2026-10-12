@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(php artisan *)",
+      "Bash(composer *)",
+      "Bash(npm run *)",
+      "Bash(npm install)",
+      "Bash(php artisan test*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git add*)",
+      "Bash(git commit*)"
+    ],
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(php artisan migrate:fresh*)",
+      "Bash(php artisan db:wipe*)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)"
+    ]
+  }
+}

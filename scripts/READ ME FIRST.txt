@@ -1,0 +1,34 @@
+AmarTv - install from this flash drive
+=====================================
+
+WINDOWS PC (each PC, about 1 minute)
+  1. Double-click  AmarTv-Setup.exe
+     - No admin password needed.
+     - If Windows shows "Windows protected your PC": click "More info" -> "Run anyway".
+       (It appears because the app is not from the Microsoft Store.)
+  2. Click Install. AmarTv starts by itself and is ready - the playlist comes
+     from the config.json on this drive.
+  3. Optional: in AmarTv Settings turn on "Start with Windows" and "Phone remote".
+
+  No install wanted? Open the folder AmarTv-portable and double-click AmarTv.exe.
+  (Runs straight from the flash drive; favorites are saved on the drive.)
+
+ANDROID PHONE (each phone)
+  1. Copy AmarTv.apk to the phone (USB cable, or send it to yourself via Google Drive/Telegram).
+  2. On the phone, tap the APK file -> Install.
+     - First time, Android asks to "Allow from this source" -> turn it on, go back, Install.
+     - If Play Protect warns "unknown app": tap "Install anyway".
+  3. Open AmarTv. The playlist is already set (personal build), channels appear.
+
+TV (laptop connected by HDMI)
+  - Win + P -> Duplicate (or "Second screen only").
+  - Sound on the TV: taskbar speaker icon -> choose the TV / HDMI output.
+  - AmarTv starts fullscreen (TV mode). Keys: Up/Down channel, Enter list, Esc back,
+    numbers 0-9, M mute, Z zoom, S series. Or use the phone as a remote:
+    PC Settings -> Phone remote ON, then on the phone tap the remote icon.
+
+UPDATING
+  Run the new AmarTv-Setup.exe / install the new APK over the old one.
+  Favorites and settings are kept.
+
+KEEP THIS DRIVE PRIVATE: it contains your IPTV login.

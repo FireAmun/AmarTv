@@ -1,0 +1,4 @@
+{
+  "playlistUrl": "http://example.com/get.php?username=USER&password=PASS&type=m3u&output=ts",
+  "userAgent": ""
+}
