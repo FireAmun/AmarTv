@@ -24,7 +24,8 @@ $dist = Join-Path $root 'dist'
 $app = Join-Path $dist 'AmarTv'
 $zip = Join-Path $dist 'AmarTv-portable-win64.zip'
 
-if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
+# Only replace this script's own outputs; other kits in dist are kept.
+foreach ($old in @($app, $zip)) { if (Test-Path $old) { Remove-Item $old -Recurse -Force } }
 New-Item -ItemType Directory -Path $app | Out-Null
 
 Write-Host '==> Copying release folder' -ForegroundColor Cyan

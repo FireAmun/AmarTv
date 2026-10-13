@@ -49,6 +49,17 @@ class PlaybackPositions extends Table {
   IntColumn get durationMs => integer()();
   DateTimeColumn get updatedAt => dateTime()();
 
+  // What to show in "Continue watching" (v3).
+  TextColumn get title => text().withDefault(const Constant(''))();
+  TextColumn get url => text().withDefault(const Constant(''))();
+  TextColumn get logo => text().withDefault(const Constant(''))();
+
+  /// `movie:ID` or `series:ID`.
+  TextColumn get ref => text().withDefault(const Constant(''))();
+
+  /// Finished (v4): shows a check mark, not in "Continue watching".
+  BoolColumn get watched => boolean().withDefault(const Constant(false))();
+
   @override
   Set<Column> get primaryKey => {mediaId};
 }
@@ -61,7 +72,7 @@ class AppDatabase extends _$AppDatabase {
   static const historyLimit = 50;
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -69,6 +80,15 @@ class AppDatabase extends _$AppDatabase {
           if (from < 2) {
             await m.addColumn(favorites, favorites.sortOrder);
             await m.createTable(playbackPositions);
+          } else if (from < 3) {
+            // v2 -> v3
+            await m.addColumn(playbackPositions, playbackPositions.title);
+            await m.addColumn(playbackPositions, playbackPositions.url);
+            await m.addColumn(playbackPositions, playbackPositions.logo);
+            await m.addColumn(playbackPositions, playbackPositions.ref);
+          }
+          if (from >= 2 && from < 4) {
+            await m.addColumn(playbackPositions, playbackPositions.watched);
           }
         },
       );
@@ -144,18 +164,41 @@ class AppDatabase extends _$AppDatabase {
         }
       });
 
+  /// Where to resume; null when not started or already watched.
   Future<Duration?> loadPosition(String mediaId) async {
     final row = await (select(playbackPositions)..where((p) => p.mediaId.equals(mediaId))).getSingleOrNull();
-    return row == null ? null : Duration(milliseconds: row.positionMs);
+    return row == null || row.watched ? null : Duration(milliseconds: row.positionMs);
   }
 
-  Future<void> savePosition(String mediaId, Duration position, Duration duration) =>
+  Future<void> markWatched(Channel media, Duration duration) =>
       into(playbackPositions).insertOnConflictUpdate(PlaybackPositionsCompanion.insert(
-        mediaId: mediaId,
+        mediaId: media.id,
+        positionMs: 0,
+        durationMs: duration.inMilliseconds,
+        updatedAt: DateTime.now(),
+        title: Value(media.name),
+        url: Value(media.url),
+        logo: Value(media.logo),
+        ref: Value(media.tvgId),
+        watched: const Value(true),
+      ));
+
+  Future<void> savePosition(Channel media, Duration position, Duration duration) =>
+      into(playbackPositions).insertOnConflictUpdate(PlaybackPositionsCompanion.insert(
+        mediaId: media.id,
         positionMs: position.inMilliseconds,
         durationMs: duration.inMilliseconds,
         updatedAt: DateTime.now(),
+        title: Value(media.name),
+        url: Value(media.url),
+        logo: Value(media.logo),
+        ref: Value(media.tvgId),
+        watched: const Value(false),
       ));
+
+  /// Started movies/episodes, most recent first (live-updating).
+  Stream<List<PlaybackPosition>> watchPositions() =>
+      (select(playbackPositions)..orderBy([(p) => OrderingTerm.desc(p.updatedAt)])).watch();
 
   Future<void> deletePosition(String mediaId) =>
       (delete(playbackPositions)..where((p) => p.mediaId.equals(mediaId))).go();

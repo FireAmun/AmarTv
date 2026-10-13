@@ -224,6 +224,7 @@ class _RemotePageState extends ConsumerState<RemotePage> {
           _btn('list', Icons.list, label: 'Channel list', size: 56),
           _btn('last', Icons.history, label: 'Last channel', size: 56),
           _btn('info', Icons.info_outline, label: 'Info', size: 56),
+          _btn('live', Icons.sensors, label: 'Go live', size: 56),
         ]),
         const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
@@ -235,6 +236,7 @@ class _RemotePageState extends ConsumerState<RemotePage> {
             _btn('mute', Icons.volume_off, label: 'Mute', size: 56),
             _btn('zoom', Icons.aspect_ratio, label: 'Zoom', size: 56),
             _btn('playpause', Icons.play_arrow, label: 'Play/pause (movies)', size: 56),
+            _btn('restart', Icons.replay, label: 'Start over (movies)', size: 56),
           ]),
           Column(children: [
             _btn('chup', Icons.add, label: 'Channel up', size: 56),

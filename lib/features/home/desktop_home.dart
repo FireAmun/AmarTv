@@ -11,12 +11,15 @@ import '../../core/theme.dart';
 import '../channels/channel_filter.dart';
 import '../channels/group_setup_page.dart';
 import '../channels/widgets.dart';
+import '../movies/movies_page.dart';
 import '../player/numeric_entry.dart';
 import '../player/player_controller.dart';
 import '../player/player_view.dart';
+import '../player/track_pickers.dart';
 import '../playlist/channel.dart';
 import '../playlist/playlist_controller.dart';
 import '../remote/remote_server.dart';
+import '../search/search_page.dart';
 import '../series/series_page.dart';
 import '../settings/app_settings.dart';
 import '../settings/settings_page.dart';
@@ -183,6 +186,12 @@ class _DesktopHomeState extends ConsumerState<DesktopHome> {
       LogicalKeyboardKey.keyI: 'info',
       LogicalKeyboardKey.info: 'info',
       LogicalKeyboardKey.keyS: 'series',
+      LogicalKeyboardKey.keyV: 'movies',
+      LogicalKeyboardKey.keyR: 'restart',
+      LogicalKeyboardKey.keyC: 'subs',
+      LogicalKeyboardKey.keyL: 'live',
+      LogicalKeyboardKey.slash: 'search',
+      LogicalKeyboardKey.numpadDivide: 'search',
       LogicalKeyboardKey.tab: 'list',
       LogicalKeyboardKey.contextMenu: 'list',
       LogicalKeyboardKey.space: 'playpause',
@@ -236,6 +245,11 @@ class _DesktopHomeState extends ConsumerState<DesktopHome> {
     final player = ref.read(playerProvider.notifier);
     final vod = ref.read(playerProvider).isVod;
 
+    // The "Next episode" card: OK plays it now, Back cancels.
+    if (ref.read(playerProvider).upNext != null && (command == 'ok' || command == 'back')) {
+      command == 'ok' ? player.playUpNext() : player.cancelUpNext();
+      return;
+    }
     if (command.length == 2 && command.startsWith('d')) {
       _numeric.addDigit(int.parse(command.substring(1)));
       setState(() => _notice = null);
@@ -308,6 +322,16 @@ class _DesktopHomeState extends ConsumerState<DesktopHome> {
         _listOpen ? _closeList() : _openList();
       case 'series':
         _openSeries();
+      case 'movies':
+        _openMovies();
+      case 'restart':
+        player.restart();
+      case 'live':
+        player.jumpToLive();
+      case 'subs':
+        _openSubtitles();
+      case 'search':
+        _openSearchAll();
     }
   }
 
@@ -446,13 +470,26 @@ class _DesktopHomeState extends ConsumerState<DesktopHome> {
     if (mounted) _rootFocus.requestFocus();
   }
 
-  Future<void> _openSeries() async {
-    if (ref.read(xtreamApiProvider) == null) {
-      _showNotice('Series need an Xtream login');
+  Future<void> _openSubtitles() async {
+    await showSubtitlePicker(context, ref);
+    if (mounted) _rootFocus.requestFocus();
+  }
+
+  /// "Search everything" (channels, movies, series).
+  Future<void> _openSearchAll() => _openVod((onPlay) => SearchPage(onPlay: onPlay), needsVod: false);
+
+  Future<void> _openSeries() => _openVod((onPlay) => SeriesPage(onPlay: onPlay));
+
+  Future<void> _openMovies() => _openVod((onPlay) => MoviesPage(onPlay: onPlay));
+
+  /// Movies / Series pages: picking something closes the pages and plays it.
+  Future<void> _openVod(Widget Function(PlayMedia onPlay) page, {bool needsVod = true}) async {
+    if (needsVod && ref.read(xtreamApiProvider) == null) {
+      _showNotice('Movies and series need an Xtream login');
       return;
     }
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => SeriesPage(onPlay: (ctx, media) {
+      builder: (_) => page((ctx, media) {
         Navigator.of(ctx).popUntil((r) => r.isFirst);
         ref.read(playerProvider.notifier).play(media);
       }),
@@ -512,6 +549,8 @@ class _DesktopHomeState extends ConsumerState<DesktopHome> {
       },
       onSettings: _openSettings,
       onSeries: ref.watch(xtreamApiProvider) == null ? null : _openSeries,
+      onMovies: ref.watch(xtreamApiProvider) == null ? null : _openMovies,
+      onSearchAll: _openSearchAll,
       onFullscreen: _isWindows ? () => _setFullscreen(!_fullscreen) : null,
     );
 
@@ -581,6 +620,8 @@ class _ChannelPanel extends ConsumerWidget {
     required this.onGroup,
     required this.onSettings,
     required this.onSeries,
+    required this.onMovies,
+    required this.onSearchAll,
     required this.onFullscreen,
   });
 
@@ -596,6 +637,8 @@ class _ChannelPanel extends ConsumerWidget {
   final ValueChanged<String?> onGroup;
   final VoidCallback onSettings;
   final VoidCallback? onSeries;
+  final VoidCallback? onMovies;
+  final VoidCallback onSearchAll;
   final VoidCallback? onFullscreen;
 
   @override
@@ -618,6 +661,9 @@ class _ChannelPanel extends ConsumerWidget {
               const Spacer(),
               ExcludeFocus(
                 child: Row(children: [
+                  IconButton(tooltip: 'Search everything (/)', onPressed: onSearchAll, icon: const Icon(Icons.manage_search)),
+                  if (onMovies != null)
+                    IconButton(tooltip: 'Movies (V)', onPressed: onMovies, icon: const Icon(Icons.movie_outlined)),
                   if (onSeries != null)
                     IconButton(tooltip: 'Series (S)', onPressed: onSeries, icon: const Icon(Icons.video_library_outlined)),
                   IconButton(

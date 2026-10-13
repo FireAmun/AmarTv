@@ -128,6 +128,15 @@ class _PlayerViewState extends ConsumerState<PlayerView> {
               // Wakelock and background handling live in PlayerController.
               wakelock: false,
               pauseUponEnteringBackgroundMode: false,
+              // Bigger subtitles in TV mode (readable from the sofa).
+              subtitleViewConfiguration: SubtitleViewConfiguration(
+                style: TextStyle(
+                  fontSize: scale.tv ? 46 : 32,
+                  height: 1.4,
+                  color: Colors.white,
+                  backgroundColor: const Color(0xAA000000),
+                ),
+              ),
             ),
           ),
           if (state.channel == null)
@@ -139,8 +148,12 @@ class _PlayerViewState extends ConsumerState<PlayerView> {
             ),
           if (state.status != PlayerStatus.playing && state.status != PlayerStatus.idle)
             Center(child: _StatusBox(state: state, onRetry: controller.retry)),
-          if (state.status == PlayerStatus.idle && state.message != null)
+          if (state.upNext != null)
+            Center(child: _UpNextCard(next: state.upNext!, controller: controller, scale: scale))
+          else if (state.status == PlayerStatus.idle && state.message != null)
             Center(child: _StatusBox(state: state, onRetry: controller.retry)),
+          if (!state.isVod && state.liveLag != null && state.status == PlayerStatus.playing)
+            Positioned(top: 16, right: 20, child: _LiveBadge(lag: state.liveLag!, onJump: controller.jumpToLive)),
           if (_showBanner && state.channel != null)
             Positioned(
               left: 24,
@@ -154,6 +167,35 @@ class _PlayerViewState extends ConsumerState<PlayerView> {
               child: _Pill(
                 text: widget.numberBuffer.isNotEmpty ? widget.numberBuffer : widget.notice!,
                 fontSize: widget.numberBuffer.isNotEmpty ? (scale.tv ? 72 : 56) : 22,
+              ),
+            ),
+          if (state.resumedFrom != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 90,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.history, color: AppColors.focus),
+                    const SizedBox(width: 10),
+                    Text('Continuing from ${_VodBar._fmt(state.resumedFrom!)}',
+                        style: TextStyle(fontSize: scale.tv ? 24 : 18, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 16),
+                    ExcludeFocus(
+                      child: TextButton.icon(
+                        onPressed: controller.restart,
+                        icon: const Icon(Icons.replay),
+                        label: Text(widget.showHint ? 'Start over (R)' : 'Start over'),
+                      ),
+                    ),
+                  ]),
+                ),
               ),
             ),
           if (_pill != null)
@@ -341,6 +383,104 @@ class _VodBar extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// "LIVE" when close to real time, otherwise how far behind (tap / L = jump).
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge({required this.lag, required this.onJump});
+  final Duration lag;
+  final VoidCallback onJump;
+
+  @override
+  Widget build(BuildContext context) {
+    final live = lag < const Duration(seconds: 6);
+    final m = lag.inMinutes;
+    final sec = lag.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return ExcludeFocus(
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: live ? null : onJump,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.circle, size: 10, color: live ? AppColors.danger : AppColors.focus),
+              const SizedBox(width: 6),
+              Text(
+                live ? 'LIVE' : '-$m:$sec  (L = go live)',
+                style: TextStyle(fontWeight: FontWeight.w700, color: live ? Colors.white : AppColors.focus),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// After an episode: "Next episode in 10" with Play now / Cancel.
+class _UpNextCard extends StatefulWidget {
+  const _UpNextCard({required this.next, required this.controller, required this.scale});
+  final Channel next;
+  final PlayerController controller;
+  final UiScale scale;
+
+  @override
+  State<_UpNextCard> createState() => _UpNextCardState();
+}
+
+class _UpNextCardState extends State<_UpNextCard> {
+  late int _left = PlayerController.upNextDelay.inSeconds;
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _left > 0) setState(() => _left--);
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final big = widget.scale.tv;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 560),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.8), borderRadius: BorderRadius.circular(14)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        ChannelLogo(channel: widget.next, size: big ? 90 : 64),
+        const SizedBox(width: 16),
+        Flexible(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text('Next episode in $_left',
+                style: TextStyle(color: AppColors.focus, fontSize: big ? 20 : 15, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Text(widget.next.name,
+                maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: big ? 24 : 18)),
+            const SizedBox(height: 12),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              FilledButton.icon(
+                onPressed: widget.controller.playUpNext,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Play now'),
+              ),
+              const SizedBox(width: 10),
+              TextButton(onPressed: widget.controller.cancelUpNext, child: const Text('Cancel')),
+            ]),
+          ]),
+        ),
+      ]),
     );
   }
 }

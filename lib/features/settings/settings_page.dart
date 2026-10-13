@@ -12,6 +12,7 @@ import '../../core/url_mask.dart';
 import '../../core/windows_startup.dart';
 import '../channels/group_setup_page.dart';
 import '../player/player_controller.dart';
+import '../player/track_pickers.dart';
 import '../playlist/playlist_controller.dart';
 import '../remote/remote_page.dart';
 import '../remote/remote_server.dart';
@@ -304,7 +305,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         SwitchListTile(
           title: const Text('Include movies & series'),
-          subtitle: const Text('Show VOD entries from the playlist as extra groups'),
+          subtitle: const Text('Also mix movies & series into the channel list (they have their own pages too)'),
           value: settings.includeVod,
           onChanged: (v) => ref.read(settingsProvider.notifier).update((s) => s.copyWith(includeVod: v)),
         ),
@@ -344,6 +345,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           subtitle: Text(player.audioTrack == null ? 'Auto' : (player.audioTrack!.language ?? player.audioTrack!.id)),
           trailing: const Icon(Icons.audiotrack_outlined),
           onTap: _audioTrack,
+        ),
+        const _Section('Live TV'),
+        SwitchListTile(
+          title: const Text('Stay close to live'),
+          subtitle: Text(settings.liveSync == LiveSync.auto
+              ? 'On: catches up quietly, jumps back to live when more than 20 s behind'
+              : 'Off: only shows how far behind you are (press L or tap the badge to go live)'),
+          value: settings.liveSync == LiveSync.auto,
+          onChanged: (v) => ref
+              .read(settingsProvider.notifier)
+              .update((s) => s.copyWith(liveSync: v ? LiveSync.auto : LiveSync.manual)),
+        ),
+        SwitchListTile(
+          title: const Text('Use HLS for live channels'),
+          subtitle: const Text('Try this if channels buffer a lot on weak Wi-Fi. '
+              'Off (TS) usually has less delay.'),
+          value: settings.liveFormat == LiveFormat.hls,
+          onChanged: (v) => ref
+              .read(settingsProvider.notifier)
+              .update((s) => s.copyWith(liveFormat: v ? LiveFormat.hls : LiveFormat.ts)),
+        ),
+        ListTile(
+          title: const Text('Subtitles'),
+          subtitle: Text(switch (settings.subtitleLanguage) {
+            '' => 'As in the video. Pick one while a movie plays (C key / CC button).',
+            'off' => 'Off for all movies and series',
+            final lang => 'Prefer "$lang" for all movies and series',
+          }),
+          trailing: settings.subtitleLanguage.isEmpty
+              ? const Icon(Icons.closed_caption_outlined)
+              : IconButton(
+                  tooltip: 'Reset',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => ref.read(settingsProvider.notifier).update((s) => s.copyWith(subtitleLanguage: '')),
+                ),
+          onTap: () => showSubtitlePicker(context, ref),
         ),
         ListTile(
           title: const Text('Picture'),
@@ -410,7 +447,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             title: Text('Keyboard'),
             subtitle: Text('Up/Down channel  -  Left/Right volume (movies: seek)  -  Enter list/select  -  Esc close  -  '
                 'Backspace last channel  -  F fullscreen  -  M mute  -  Z zoom  -  I info  -  S series  -  '
-                'Space pause (movies)  -  Tab list  -  Ctrl+F search  -  0-9 number  -  +/- volume'),
+                'Space pause (movies)  -  R start over  -  C subtitles  -  L go live  -  V movies  -  '
+                '/ search everything  -  Tab list  -  Ctrl+F search list  -  0-9 number  -  +/- volume'),
           ),
       ],
     );

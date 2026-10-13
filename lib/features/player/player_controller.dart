@@ -12,7 +12,10 @@ import '../../core/url_mask.dart';
 import '../playlist/channel.dart';
 import '../playlist/playlist_controller.dart';
 import '../settings/app_settings.dart';
+import '../vod/episode_media.dart';
 import '../xtream/epg.dart';
+import '../xtream/xtream_api.dart';
+import 'stream_url.dart';
 
 enum PlayerStatus { idle, connecting, buffering, playing, reconnecting, unavailable }
 
@@ -27,12 +30,30 @@ class PlayerUiState {
     this.audioTrack,
     this.sleepAt,
     this.paused = false,
+    this.resumedFrom,
+    this.subtitleTracks = const [],
+    this.subtitleTrack,
+    this.liveLag,
+    this.upNext,
   });
 
   final Channel? channel;
 
   /// Movies/episodes only (live TV is never paused).
   final bool paused;
+
+  /// Set for a few seconds after a movie/episode jumped to where you stopped
+  /// (shows "Continuing from ..." with a Start over button).
+  final Duration? resumedFrom;
+
+  final List<SubtitleTrack> subtitleTracks;
+  final SubtitleTrack? subtitleTrack;
+
+  /// Live only: how far playback is behind the live edge (null = unknown).
+  final Duration? liveLag;
+
+  /// The next episode, counting down after an episode finished.
+  final Channel? upNext;
 
   bool get isVod => channel != null && isVodUrl(channel!.url);
   final PlayerStatus status;
@@ -57,8 +78,21 @@ class PlayerUiState {
     DateTime? sleepAt,
     bool clearSleep = false,
     bool? paused,
+    Duration? resumedFrom,
+    bool clearResumed = false,
+    List<SubtitleTrack>? subtitleTracks,
+    SubtitleTrack? subtitleTrack,
+    Duration? liveLag,
+    bool clearLiveLag = false,
+    Channel? upNext,
+    bool clearUpNext = false,
   }) =>
       PlayerUiState(
+        subtitleTracks: subtitleTracks ?? this.subtitleTracks,
+        subtitleTrack: subtitleTrack ?? this.subtitleTrack,
+        liveLag: clearLiveLag ? null : (liveLag ?? this.liveLag),
+        upNext: clearUpNext ? null : (upNext ?? this.upNext),
+        resumedFrom: clearResumed ? null : (resumedFrom ?? this.resumedFrom),
         channel: channel ?? this.channel,
         status: status ?? this.status,
         message: clearMessage ? null : (message ?? this.message),
@@ -104,8 +138,26 @@ class PlayerController extends Notifier<PlayerUiState> {
 
   // Movies/episodes: resume point to apply once the duration is known.
   Duration? _pendingSeek;
+
+  /// The pending seek comes from a saved position (show "Continuing from").
+  bool _announceResume = false;
+  Timer? _resumeNoticeTimer;
   bool _userPaused = false;
   Timer? _positionSaver;
+
+  // Live delay: wall clock vs. played time since playback (re)started.
+  static const liveJumpAfter = Duration(seconds: 20);
+  static const liveCatchUpAbove = Duration(seconds: 3);
+  DateTime? _liveBaseWall;
+  Duration _liveBasePos = Duration.zero;
+  DateTime _lastLiveJump = DateTime.fromMillisecondsSinceEpoch(0);
+  double _rate = 1.0;
+
+  /// The url actually opened (live channels may be switched to HLS).
+  String _openedUrl = '';
+
+  String? _subsAppliedFor;
+  Timer? _upNextTimer;
 
   Channel? get previousChannel => _previousChannel;
 
@@ -144,14 +196,20 @@ class PlayerController extends Notifier<PlayerUiState> {
       player.stream.position.listen(_onPosition),
       player.stream.tracks.listen((t) {
         final audio = t.audio.where((a) => a.id != 'auto' && a.id != 'no').toList();
-        state = state.copyWith(audioTracks: audio);
+        final subs = t.subtitle.where((a) => a.id != 'auto' && a.id != 'no').toList();
+        state = state.copyWith(audioTracks: audio, subtitleTracks: subs);
+        _applyPreferredSubtitle(subs);
       }),
-      player.stream.track.listen((t) => state = state.copyWith(audioTrack: t.audio)),
+      player.stream.track.listen((t) => state = state.copyWith(audioTrack: t.audio, subtitleTrack: t.subtitle)),
     ]);
     _watchdog = Timer.periodic(const Duration(seconds: 2), (_) => _checkStall());
     _positionSaver = Timer.periodic(const Duration(seconds: 10), (_) => _savePosition());
 
     ref.listen(settingsProvider.select((s) => s.profile), (_, profile) => _applyProfile(profile));
+    ref.listen(settingsProvider.select((s) => s.liveFormat), (_, _) {
+      final channel = state.channel;
+      if (_active && channel != null && !state.isVod) play(channel);
+    });
     ref.listen(configProvider.select((c) => c.userAgent), (_, ua) => _applyOptions(ref.read(settingsProvider).profile));
 
     ref.onDispose(() {
@@ -163,6 +221,8 @@ class PlayerController extends Notifier<PlayerUiState> {
       _stableTimer?.cancel();
       _sleepTimer?.cancel();
       _positionSaver?.cancel();
+      _resumeNoticeTimer?.cancel();
+      _upNextTimer?.cancel();
       WakelockPlus.disable();
       player.dispose();
     });
@@ -219,6 +279,7 @@ class PlayerController extends Notifier<PlayerUiState> {
 
   Future<void> play(Channel channel) async {
     await _savePosition();
+    _upNextTimer?.cancel();
     final gen = ++_gen;
     _retryTimer?.cancel();
     _stableTimer?.cancel();
@@ -229,16 +290,28 @@ class PlayerController extends Notifier<PlayerUiState> {
     _active = true;
     _userPaused = false;
     _pendingSeek = null;
+    _announceResume = false;
     if (isVodUrl(channel.url)) {
       final saved = await ref.read(databaseProvider).loadPosition(channel.id);
       if (gen != _gen) return;
-      if (saved != null && saved > const Duration(seconds: 30)) _pendingSeek = saved;
+      if (saved != null && saved > const Duration(seconds: 30)) {
+        _pendingSeek = saved;
+        _announceResume = true;
+      }
     }
 
     final current = state.channel;
     if (current != null && current.id != channel.id) _previousChannel = current;
 
-    state = state.copyWith(channel: channel, status: PlayerStatus.connecting, clearMessage: true, paused: false);
+    _resumeNoticeTimer?.cancel();
+    state = state.copyWith(
+        channel: channel,
+        status: PlayerStatus.connecting,
+        clearMessage: true,
+        paused: false,
+        clearResumed: true,
+        clearLiveLag: true,
+        clearUpNext: true);
     unawaited(ref.read(historyProvider.notifier).add(channel.id));
     ref.read(settingsProvider.notifier).update((s) => s.copyWith(lastChannelId: channel.id));
     unawaited(WakelockPlus.enable().catchError((_) {}));
@@ -252,16 +325,87 @@ class PlayerController extends Notifier<PlayerUiState> {
     _openedAt = DateTime.now();
     _lastProgress = _openedAt;
     _lastPosition = Duration.zero;
+    _liveBaseWall = null;
+    final vod = isVodUrl(channel.url);
+    _openedUrl = vod ? channel.url : liveStreamUrl(channel.url, ref.read(settingsProvider).liveFormat);
+    await _applyBuffer(vod: vod);
+    if (_rate != 1.0) await _setRate(1.0);
     try {
-      await player.open(Media(channel.url), play: true);
+      await player.open(Media(_openedUrl), play: true);
     } catch (e) {
       _fail(gen, e.toString());
     }
   }
 
+  /// Live: small buffer so playback can't drift far behind. Movies: big buffer.
+  Future<void> _applyBuffer({required bool vod}) async {
+    final native = _native;
+    if (native == null) return;
+    final compat = ref.read(settingsProvider).profile == PlaybackProfile.compatibility;
+    final options = vod
+        ? {'cache-secs': '60', 'demuxer-readahead-secs': compat ? '20' : '60'}
+        : {'cache-secs': compat ? '12' : '8', 'demuxer-readahead-secs': compat ? '8' : '5'};
+    for (final e in options.entries) {
+      try {
+        await native.setProperty(e.key, e.value);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _setRate(double rate) async {
+    _rate = rate;
+    try {
+      await player.setRate(rate);
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------- live delay
+
+  /// Called every 2 s. Measures how far live playback is behind and keeps it
+  /// close: play 5% faster while catching up on what is already downloaded,
+  /// or reconnect ("jump to live") when far behind (auto mode).
+  void _liveSyncTick() {
+    final s = player.state;
+    if (!_active || state.isVod || !_playedThisChannel || (_retryTimer?.isActive ?? false)) return;
+    final base = _liveBaseWall;
+    if (base == null) return;
+    final now = DateTime.now();
+    var lag = now.difference(base) - (s.position - _liveBasePos);
+    if (lag.isNegative) {
+      // Played faster than real time from a full buffer: re-anchor.
+      _liveBaseWall = now;
+      _liveBasePos = s.position;
+      lag = Duration.zero;
+    }
+    if ((lag - (state.liveLag ?? Duration.zero)).abs() >= const Duration(seconds: 1) || state.liveLag == null) {
+      state = state.copyWith(liveLag: lag);
+    }
+
+    final auto = ref.read(settingsProvider).liveSync == LiveSync.auto;
+    if (auto && lag > liveJumpAfter && !s.buffering && now.difference(_lastLiveJump) > const Duration(seconds: 60)) {
+      AppLog.i('Live delay ${lag.inSeconds} s - jumping to live');
+      jumpToLive();
+      return;
+    }
+    final ahead = s.buffer - s.position;
+    final wantRate = auto && lag > liveCatchUpAbove && ahead > const Duration(seconds: 2) ? 1.05 : 1.0;
+    if (wantRate != _rate && !s.buffering) _setRate(wantRate);
+  }
+
+  /// Reconnects the live channel: a new connection starts at the live edge.
+  void jumpToLive() {
+    if (!_active || state.isVod || state.channel == null) return;
+    _lastLiveJump = DateTime.now();
+    _playedThisChannel = false;
+    state = state.copyWith(liveLag: Duration.zero);
+    _open(_gen);
+  }
+
   /// Stops playback and all retries (leaving the player, backgrounded).
   Future<void> stop({String? message}) async {
     await _savePosition();
+    _upNextTimer?.cancel();
+    if (state.upNext != null) state = state.copyWith(clearUpNext: true);
     _gen++;
     _active = false;
     _retryTimer?.cancel();
@@ -287,6 +431,10 @@ class PlayerController extends Notifier<PlayerUiState> {
     if (pos == _lastPosition) return;
     _lastPosition = pos;
     _lastProgress = DateTime.now();
+    if (_active && !state.isVod && _liveBaseWall == null && player.state.playing && !player.state.buffering) {
+      _liveBaseWall = DateTime.now();
+      _liveBasePos = pos;
+    }
     if (_active && !_playedThisChannel && player.state.playing) {
       _playedThisChannel = true;
       final gen = _gen;
@@ -324,6 +472,7 @@ class PlayerController extends Notifier<PlayerUiState> {
   }
 
   void _checkStall() {
+    _liveSyncTick();
     if (!_active || _userPaused || (_retryTimer?.isActive ?? false)) return;
     final now = DateTime.now();
     final s = player.state;
@@ -344,7 +493,7 @@ class PlayerController extends Notifier<PlayerUiState> {
     final text = '${log.prefix}: ${log.text}';
     // An error naming another url belongs to the previous channel.
     final url = _urls.firstMatch(log.text)?.group(0);
-    if (url != null && url.replaceAll(RegExp(r'[.,;]+$'), '') != state.channel?.url) return;
+    if (url != null && url.replaceAll(RegExp(r'[.,;]+$'), '') != _openedUrl) return;
     // Only react to errors that stop playback; mpv also reports recoverable ones.
     if (_isFatal(text)) {
       _fail(_gen, text);
@@ -475,10 +624,29 @@ class PlayerController extends Notifier<PlayerUiState> {
     final target = _pendingSeek;
     if (target == null || duration <= Duration.zero) return;
     _pendingSeek = null;
+    final announce = _announceResume;
+    _announceResume = false;
     if (target < duration - const Duration(seconds: 60)) {
       AppLog.i('Resuming at ${target.inSeconds} s');
       player.seek(target);
+      // Only a resume from "where you stopped" is announced, not a reconnect.
+      if (announce) {
+        state = state.copyWith(resumedFrom: target);
+        _resumeNoticeTimer?.cancel();
+        _resumeNoticeTimer = Timer(const Duration(seconds: 8), () => state = state.copyWith(clearResumed: true));
+      }
     }
+  }
+
+  /// "Start over": play the current movie/episode from the beginning.
+  void restart() {
+    final channel = state.channel;
+    if (channel == null || !state.isVod || !_active) return;
+    _resumeNoticeTimer?.cancel();
+    _lastProgress = DateTime.now();
+    player.seek(Duration.zero);
+    ref.read(databaseProvider).deletePosition(channel.id);
+    state = state.copyWith(clearResumed: true);
   }
 
   Future<void> _savePosition() async {
@@ -490,9 +658,9 @@ class PlayerController extends Notifier<PlayerUiState> {
     final db = ref.read(databaseProvider);
     try {
       if (pos > dur - const Duration(seconds: 60)) {
-        await db.deletePosition(channel.id); // watched
+        await db.markWatched(channel, dur);
       } else {
-        await db.savePosition(channel.id, pos, dur);
+        await db.savePosition(channel, pos, dur);
       }
     } catch (e) {
       AppLog.w('Saving resume position failed: $e');
@@ -501,12 +669,74 @@ class PlayerController extends Notifier<PlayerUiState> {
 
   void _onVodFinished() {
     final channel = state.channel;
-    if (channel != null) ref.read(databaseProvider).deletePosition(channel.id);
+    if (channel != null) ref.read(databaseProvider).markWatched(channel, player.state.duration);
     _gen++;
     _active = false;
     _retryTimer?.cancel();
     state = state.copyWith(status: PlayerStatus.idle, message: 'Finished.', paused: false);
     unawaited(WakelockPlus.disable().catchError((_) {}));
+    if (channel != null) unawaited(_queueNextEpisode(channel));
+  }
+
+  static const upNextDelay = Duration(seconds: 10);
+
+  /// After an episode: show "Next episode" and play it after [upNextDelay].
+  Future<void> _queueNextEpisode(Channel finished) async {
+    final seriesId = seriesIdOf(finished);
+    final episodeId = episodeIdOf(finished);
+    final api = ref.read(xtreamApiProvider);
+    if (seriesId == null || episodeId == null || api == null) return;
+    try {
+      final next = nextEpisode(await api.seriesEpisodes(seriesId), episodeId);
+      if (next == null || state.channel?.id != finished.id || _active) return;
+      final media = episodeMedia(api,
+          seriesId: seriesId, seriesName: seriesNameOf(finished), cover: finished.logo, e: next);
+      state = state.copyWith(upNext: media, clearMessage: true);
+      _upNextTimer?.cancel();
+      _upNextTimer = Timer(upNextDelay, playUpNext);
+    } catch (e) {
+      AppLog.w('Next episode lookup failed: $e');
+    }
+  }
+
+  void playUpNext() {
+    final next = state.upNext;
+    _upNextTimer?.cancel();
+    if (next != null) play(next);
+  }
+
+  void cancelUpNext() {
+    _upNextTimer?.cancel();
+    state = state.copyWith(clearUpNext: true);
+  }
+
+  // ---------------------------------------------------------------- subtitles
+
+  /// Picks a subtitle track and remembers the language for the next movie.
+  Future<void> setSubtitle(SubtitleTrack? track) async {
+    await player.setSubtitleTrack(track ?? SubtitleTrack.no());
+    final pref = track == null ? 'off' : (track.language ?? track.title ?? '').trim();
+    ref.read(settingsProvider.notifier).update((s) => s.copyWith(subtitleLanguage: pref));
+  }
+
+  /// Applies the remembered subtitle choice once per movie/episode.
+  void _applyPreferredSubtitle(List<SubtitleTrack> subs) {
+    final channel = state.channel;
+    if (channel == null || !state.isVod || subs.isEmpty || _subsAppliedFor == channel.id) return;
+    _subsAppliedFor = channel.id;
+    final pref = ref.read(settingsProvider).subtitleLanguage.toLowerCase();
+    if (pref.isEmpty) return; // leave the file's default
+    if (pref == 'off') {
+      player.setSubtitleTrack(SubtitleTrack.no());
+      return;
+    }
+    for (final t in subs) {
+      final label = '${t.language ?? ''} ${t.title ?? ''}'.toLowerCase();
+      if (label.contains(pref)) {
+        player.setSubtitleTrack(t);
+        return;
+      }
+    }
   }
 
   /// null cancels the sleep timer.

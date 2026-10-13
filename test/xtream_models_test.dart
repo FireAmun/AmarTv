@@ -80,6 +80,22 @@ void main() {
     expect(parseCategories([{'category_id': 3, 'category_name': ' Drama '}]).single.name, 'Drama');
   });
 
+  test('movies', () {
+    final list = parseMovies([
+      {'stream_id': 7, 'name': 'Dune Part Two (2024)', 'stream_icon': 'http://c/7.jpg', 'category_id': '4', 'container_extension': 'mkv', 'rating': '8.5'},
+      {'stream_id': '8', 'name': 'No Extension', 'container_extension': null, 'rating': '0', 'year': '1999'},
+      {'stream_id': null, 'name': 'Bad'},
+      {'stream_id': 9, 'name': ' '},
+    ]);
+    expect(list.map((m) => m.name), ['Dune Part Two (2024)', 'No Extension']);
+    expect(list[0].year, '2024');
+    expect(list[0].extension, 'mkv');
+    expect(list[0].rating, '8.5');
+    expect(list[1].extension, 'mp4');
+    expect(list[1].rating, '');
+    expect(list[1].year, '1999');
+  });
+
   test('stream id from live urls', () {
     expect(streamIdFromUrl('http://h:80/live/u/p/12345.ts'), 12345);
     expect(streamIdFromUrl('http://h:80/u/p/678'), 678);

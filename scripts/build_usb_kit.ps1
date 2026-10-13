@@ -1,4 +1,4 @@
-# Builds everything for the flash drive into dist\USB-Kit:
+# Builds everything for the flash drive into dist\<KitName> (default USB-Kit):
 #   AmarTv-Setup.exe     Windows installer (no admin rights needed)
 #   AmarTv.apk           Android app
 #   AmarTv-portable\     run-without-installing version
@@ -9,7 +9,9 @@
 # build with your playlist URL inside, so phones need no setup at all.
 # Do not share a personal kit or APK: it contains your login.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\build_usb_kit.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\build_usb_kit.ps1 [-KitName USB-Kit-2]
+
+param([string]$KitName = 'USB-Kit')
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -32,7 +34,15 @@ $iscc = @(
 if (-not $iscc) { throw 'Inno Setup 6 not found. Install it: winget install JRSoftware.InnoSetup --scope user' }
 $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
 $env:AMARTV_VERSION = $version
-Step 'Windows installer' { & $iscc /Q 'installer\amartv.iss' }
+# Antivirus scanning the new setup file can make Inno Setup fail
+# ("EndUpdateResource failed"); a retry a few seconds later usually works.
+for ($try = 1; $try -le 3; $try++) {
+    Write-Host "==> Windows installer (try $try)" -ForegroundColor Cyan
+    & $iscc /Q 'installer\amartv.iss'
+    if ($LASTEXITCODE -eq 0) { break }
+    if ($try -eq 3) { throw "Windows installer failed (exit code $LASTEXITCODE)" }
+    Start-Sleep -Seconds 5
+}
 
 # 3. Android APK (personal when config.json exists).
 $configFile = Join-Path $root 'config.json'
@@ -57,7 +67,7 @@ if ($url) {
 }
 
 # 4. Assemble the kit.
-$kit = Join-Path $root 'dist\USB-Kit'
+$kit = Join-Path $root (Join-Path 'dist' $KitName)
 if (Test-Path $kit) { Remove-Item $kit -Recurse -Force }
 New-Item -ItemType Directory -Path $kit | Out-Null
 Copy-Item 'dist\AmarTv-Setup.exe' $kit

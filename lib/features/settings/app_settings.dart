@@ -15,6 +15,18 @@ enum PlaybackProfile {
 /// How the video fills the screen (Z key).
 enum ZoomMode { fit, fill, stretch }
 
+/// Keeping live TV close to real time.
+enum LiveSync {
+  /// Catch up quietly and jump to live when far behind.
+  auto,
+
+  /// Only show the delay; jump with the L key.
+  manual,
+}
+
+/// Stream format for live channels (Xtream panels offer both).
+enum LiveFormat { ts, hls }
+
 /// User settings, stored as JSON in `data/amartv/settings.json` so they travel
 /// with the portable folder (shared_preferences would write to %APPDATA%).
 class AppSettings {
@@ -34,6 +46,9 @@ class AppSettings {
     this.remoteEnabled = false,
     this.remoteCode = '',
     this.remoteTarget = '',
+    this.liveSync = LiveSync.auto,
+    this.liveFormat = LiveFormat.ts,
+    this.subtitleLanguage = '',
   });
 
   final bool tvMode;
@@ -66,6 +81,12 @@ class AppSettings {
   /// Phone: last PC used as remote target, "host|code".
   final String remoteTarget;
 
+  final LiveSync liveSync;
+  final LiveFormat liveFormat;
+
+  /// Preferred subtitle language/name for movies & series ('' = off).
+  final String subtitleLanguage;
+
   AppSettings copyWith({
     bool? tvMode,
     PlaybackProfile? profile,
@@ -82,6 +103,9 @@ class AppSettings {
     bool? remoteEnabled,
     String? remoteCode,
     String? remoteTarget,
+    LiveSync? liveSync,
+    LiveFormat? liveFormat,
+    String? subtitleLanguage,
   }) =>
       AppSettings(
         tvMode: tvMode ?? this.tvMode,
@@ -99,6 +123,9 @@ class AppSettings {
         remoteEnabled: remoteEnabled ?? this.remoteEnabled,
         remoteCode: remoteCode ?? this.remoteCode,
         remoteTarget: remoteTarget ?? this.remoteTarget,
+        liveSync: liveSync ?? this.liveSync,
+        liveFormat: liveFormat ?? this.liveFormat,
+        subtitleLanguage: subtitleLanguage ?? this.subtitleLanguage,
       );
 
   Map<String, dynamic> toJson() => {
@@ -117,6 +144,9 @@ class AppSettings {
         'remoteEnabled': remoteEnabled,
         'remoteCode': remoteCode,
         'remoteTarget': remoteTarget,
+        'liveSync': liveSync.name,
+        'liveFormat': liveFormat.name,
+        'subtitleLanguage': subtitleLanguage,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) {
@@ -138,6 +168,9 @@ class AppSettings {
       remoteEnabled: j['remoteEnabled'] as bool? ?? false,
       remoteCode: j['remoteCode'] as String? ?? '',
       remoteTarget: j['remoteTarget'] as String? ?? '',
+      liveSync: byName(LiveSync.values, j['liveSync'], LiveSync.auto),
+      liveFormat: byName(LiveFormat.values, j['liveFormat'], LiveFormat.ts),
+      subtitleLanguage: j['subtitleLanguage'] as String? ?? '',
     );
   }
 

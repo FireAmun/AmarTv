@@ -1082,12 +1082,72 @@ class $PlaybackPositionsTable extends PlaybackPositions
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _urlMeta = const VerificationMeta('url');
+  @override
+  late final GeneratedColumn<String> url = GeneratedColumn<String>(
+    'url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _logoMeta = const VerificationMeta('logo');
+  @override
+  late final GeneratedColumn<String> logo = GeneratedColumn<String>(
+    'logo',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _refMeta = const VerificationMeta('ref');
+  @override
+  late final GeneratedColumn<String> ref = GeneratedColumn<String>(
+    'ref',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _watchedMeta = const VerificationMeta(
+    'watched',
+  );
+  @override
+  late final GeneratedColumn<bool> watched = GeneratedColumn<bool>(
+    'watched',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("watched" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     mediaId,
     positionMs,
     durationMs,
     updatedAt,
+    title,
+    url,
+    logo,
+    ref,
+    watched,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1133,6 +1193,36 @@ class $PlaybackPositionsTable extends PlaybackPositions
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('url')) {
+      context.handle(
+        _urlMeta,
+        url.isAcceptableOrUnknown(data['url']!, _urlMeta),
+      );
+    }
+    if (data.containsKey('logo')) {
+      context.handle(
+        _logoMeta,
+        logo.isAcceptableOrUnknown(data['logo']!, _logoMeta),
+      );
+    }
+    if (data.containsKey('ref')) {
+      context.handle(
+        _refMeta,
+        ref.isAcceptableOrUnknown(data['ref']!, _refMeta),
+      );
+    }
+    if (data.containsKey('watched')) {
+      context.handle(
+        _watchedMeta,
+        watched.isAcceptableOrUnknown(data['watched']!, _watchedMeta),
+      );
+    }
     return context;
   }
 
@@ -1158,6 +1248,26 @@ class $PlaybackPositionsTable extends PlaybackPositions
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      url: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}url'],
+      )!,
+      logo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}logo'],
+      )!,
+      ref: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ref'],
+      )!,
+      watched: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}watched'],
+      )!,
     );
   }
 
@@ -1173,11 +1283,25 @@ class PlaybackPosition extends DataClass
   final int positionMs;
   final int durationMs;
   final DateTime updatedAt;
+  final String title;
+  final String url;
+  final String logo;
+
+  /// `movie:ID` or `series:ID`.
+  final String ref;
+
+  /// Finished (v4): shows a check mark, not in "Continue watching".
+  final bool watched;
   const PlaybackPosition({
     required this.mediaId,
     required this.positionMs,
     required this.durationMs,
     required this.updatedAt,
+    required this.title,
+    required this.url,
+    required this.logo,
+    required this.ref,
+    required this.watched,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1186,6 +1310,11 @@ class PlaybackPosition extends DataClass
     map['position_ms'] = Variable<int>(positionMs);
     map['duration_ms'] = Variable<int>(durationMs);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['title'] = Variable<String>(title);
+    map['url'] = Variable<String>(url);
+    map['logo'] = Variable<String>(logo);
+    map['ref'] = Variable<String>(ref);
+    map['watched'] = Variable<bool>(watched);
     return map;
   }
 
@@ -1195,6 +1324,11 @@ class PlaybackPosition extends DataClass
       positionMs: Value(positionMs),
       durationMs: Value(durationMs),
       updatedAt: Value(updatedAt),
+      title: Value(title),
+      url: Value(url),
+      logo: Value(logo),
+      ref: Value(ref),
+      watched: Value(watched),
     );
   }
 
@@ -1208,6 +1342,11 @@ class PlaybackPosition extends DataClass
       positionMs: serializer.fromJson<int>(json['positionMs']),
       durationMs: serializer.fromJson<int>(json['durationMs']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      title: serializer.fromJson<String>(json['title']),
+      url: serializer.fromJson<String>(json['url']),
+      logo: serializer.fromJson<String>(json['logo']),
+      ref: serializer.fromJson<String>(json['ref']),
+      watched: serializer.fromJson<bool>(json['watched']),
     );
   }
   @override
@@ -1218,6 +1357,11 @@ class PlaybackPosition extends DataClass
       'positionMs': serializer.toJson<int>(positionMs),
       'durationMs': serializer.toJson<int>(durationMs),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'title': serializer.toJson<String>(title),
+      'url': serializer.toJson<String>(url),
+      'logo': serializer.toJson<String>(logo),
+      'ref': serializer.toJson<String>(ref),
+      'watched': serializer.toJson<bool>(watched),
     };
   }
 
@@ -1226,11 +1370,21 @@ class PlaybackPosition extends DataClass
     int? positionMs,
     int? durationMs,
     DateTime? updatedAt,
+    String? title,
+    String? url,
+    String? logo,
+    String? ref,
+    bool? watched,
   }) => PlaybackPosition(
     mediaId: mediaId ?? this.mediaId,
     positionMs: positionMs ?? this.positionMs,
     durationMs: durationMs ?? this.durationMs,
     updatedAt: updatedAt ?? this.updatedAt,
+    title: title ?? this.title,
+    url: url ?? this.url,
+    logo: logo ?? this.logo,
+    ref: ref ?? this.ref,
+    watched: watched ?? this.watched,
   );
   PlaybackPosition copyWithCompanion(PlaybackPositionsCompanion data) {
     return PlaybackPosition(
@@ -1242,6 +1396,11 @@ class PlaybackPosition extends DataClass
           ? data.durationMs.value
           : this.durationMs,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      title: data.title.present ? data.title.value : this.title,
+      url: data.url.present ? data.url.value : this.url,
+      logo: data.logo.present ? data.logo.value : this.logo,
+      ref: data.ref.present ? data.ref.value : this.ref,
+      watched: data.watched.present ? data.watched.value : this.watched,
     );
   }
 
@@ -1251,13 +1410,28 @@ class PlaybackPosition extends DataClass
           ..write('mediaId: $mediaId, ')
           ..write('positionMs: $positionMs, ')
           ..write('durationMs: $durationMs, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('title: $title, ')
+          ..write('url: $url, ')
+          ..write('logo: $logo, ')
+          ..write('ref: $ref, ')
+          ..write('watched: $watched')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(mediaId, positionMs, durationMs, updatedAt);
+  int get hashCode => Object.hash(
+    mediaId,
+    positionMs,
+    durationMs,
+    updatedAt,
+    title,
+    url,
+    logo,
+    ref,
+    watched,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1265,7 +1439,12 @@ class PlaybackPosition extends DataClass
           other.mediaId == this.mediaId &&
           other.positionMs == this.positionMs &&
           other.durationMs == this.durationMs &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.title == this.title &&
+          other.url == this.url &&
+          other.logo == this.logo &&
+          other.ref == this.ref &&
+          other.watched == this.watched);
 }
 
 class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
@@ -1273,12 +1452,22 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
   final Value<int> positionMs;
   final Value<int> durationMs;
   final Value<DateTime> updatedAt;
+  final Value<String> title;
+  final Value<String> url;
+  final Value<String> logo;
+  final Value<String> ref;
+  final Value<bool> watched;
   final Value<int> rowid;
   const PlaybackPositionsCompanion({
     this.mediaId = const Value.absent(),
     this.positionMs = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.title = const Value.absent(),
+    this.url = const Value.absent(),
+    this.logo = const Value.absent(),
+    this.ref = const Value.absent(),
+    this.watched = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PlaybackPositionsCompanion.insert({
@@ -1286,6 +1475,11 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
     required int positionMs,
     required int durationMs,
     required DateTime updatedAt,
+    this.title = const Value.absent(),
+    this.url = const Value.absent(),
+    this.logo = const Value.absent(),
+    this.ref = const Value.absent(),
+    this.watched = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : mediaId = Value(mediaId),
        positionMs = Value(positionMs),
@@ -1296,6 +1490,11 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
     Expression<int>? positionMs,
     Expression<int>? durationMs,
     Expression<DateTime>? updatedAt,
+    Expression<String>? title,
+    Expression<String>? url,
+    Expression<String>? logo,
+    Expression<String>? ref,
+    Expression<bool>? watched,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1303,6 +1502,11 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
       if (positionMs != null) 'position_ms': positionMs,
       if (durationMs != null) 'duration_ms': durationMs,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (title != null) 'title': title,
+      if (url != null) 'url': url,
+      if (logo != null) 'logo': logo,
+      if (ref != null) 'ref': ref,
+      if (watched != null) 'watched': watched,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1312,6 +1516,11 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
     Value<int>? positionMs,
     Value<int>? durationMs,
     Value<DateTime>? updatedAt,
+    Value<String>? title,
+    Value<String>? url,
+    Value<String>? logo,
+    Value<String>? ref,
+    Value<bool>? watched,
     Value<int>? rowid,
   }) {
     return PlaybackPositionsCompanion(
@@ -1319,6 +1528,11 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
       positionMs: positionMs ?? this.positionMs,
       durationMs: durationMs ?? this.durationMs,
       updatedAt: updatedAt ?? this.updatedAt,
+      title: title ?? this.title,
+      url: url ?? this.url,
+      logo: logo ?? this.logo,
+      ref: ref ?? this.ref,
+      watched: watched ?? this.watched,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1338,6 +1552,21 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (url.present) {
+      map['url'] = Variable<String>(url.value);
+    }
+    if (logo.present) {
+      map['logo'] = Variable<String>(logo.value);
+    }
+    if (ref.present) {
+      map['ref'] = Variable<String>(ref.value);
+    }
+    if (watched.present) {
+      map['watched'] = Variable<bool>(watched.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1351,6 +1580,11 @@ class PlaybackPositionsCompanion extends UpdateCompanion<PlaybackPosition> {
           ..write('positionMs: $positionMs, ')
           ..write('durationMs: $durationMs, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('title: $title, ')
+          ..write('url: $url, ')
+          ..write('logo: $logo, ')
+          ..write('ref: $ref, ')
+          ..write('watched: $watched, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1954,6 +2188,11 @@ typedef $$PlaybackPositionsTableCreateCompanionBuilder =
       required int positionMs,
       required int durationMs,
       required DateTime updatedAt,
+      Value<String> title,
+      Value<String> url,
+      Value<String> logo,
+      Value<String> ref,
+      Value<bool> watched,
       Value<int> rowid,
     });
 typedef $$PlaybackPositionsTableUpdateCompanionBuilder =
@@ -1962,6 +2201,11 @@ typedef $$PlaybackPositionsTableUpdateCompanionBuilder =
       Value<int> positionMs,
       Value<int> durationMs,
       Value<DateTime> updatedAt,
+      Value<String> title,
+      Value<String> url,
+      Value<String> logo,
+      Value<String> ref,
+      Value<bool> watched,
       Value<int> rowid,
     });
 
@@ -1991,6 +2235,31 @@ class $$PlaybackPositionsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get url => $composableBuilder(
+    column: $table.url,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get logo => $composableBuilder(
+    column: $table.logo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ref => $composableBuilder(
+    column: $table.ref,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get watched => $composableBuilder(
+    column: $table.watched,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -2023,6 +2292,31 @@ class $$PlaybackPositionsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get url => $composableBuilder(
+    column: $table.url,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get logo => $composableBuilder(
+    column: $table.logo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ref => $composableBuilder(
+    column: $table.ref,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get watched => $composableBuilder(
+    column: $table.watched,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PlaybackPositionsTableAnnotationComposer
@@ -2049,6 +2343,21 @@ class $$PlaybackPositionsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get url =>
+      $composableBuilder(column: $table.url, builder: (column) => column);
+
+  GeneratedColumn<String> get logo =>
+      $composableBuilder(column: $table.logo, builder: (column) => column);
+
+  GeneratedColumn<String> get ref =>
+      $composableBuilder(column: $table.ref, builder: (column) => column);
+
+  GeneratedColumn<bool> get watched =>
+      $composableBuilder(column: $table.watched, builder: (column) => column);
 }
 
 class $$PlaybackPositionsTableTableManager
@@ -2095,12 +2404,22 @@ class $$PlaybackPositionsTableTableManager
                 Value<int> positionMs = const Value.absent(),
                 Value<int> durationMs = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> url = const Value.absent(),
+                Value<String> logo = const Value.absent(),
+                Value<String> ref = const Value.absent(),
+                Value<bool> watched = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PlaybackPositionsCompanion(
                 mediaId: mediaId,
                 positionMs: positionMs,
                 durationMs: durationMs,
                 updatedAt: updatedAt,
+                title: title,
+                url: url,
+                logo: logo,
+                ref: ref,
+                watched: watched,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2109,12 +2428,22 @@ class $$PlaybackPositionsTableTableManager
                 required int positionMs,
                 required int durationMs,
                 required DateTime updatedAt,
+                Value<String> title = const Value.absent(),
+                Value<String> url = const Value.absent(),
+                Value<String> logo = const Value.absent(),
+                Value<String> ref = const Value.absent(),
+                Value<bool> watched = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PlaybackPositionsCompanion.insert(
                 mediaId: mediaId,
                 positionMs: positionMs,
                 durationMs: durationMs,
                 updatedAt: updatedAt,
+                title: title,
+                url: url,
+                logo: logo,
+                ref: ref,
+                watched: watched,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

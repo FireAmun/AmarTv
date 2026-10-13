@@ -24,8 +24,20 @@ TV (laptop connected by HDMI)
   - Win + P -> Duplicate (or "Second screen only").
   - Sound on the TV: taskbar speaker icon -> choose the TV / HDMI output.
   - AmarTv starts fullscreen (TV mode). Keys: Up/Down channel, Enter list, Esc back,
-    numbers 0-9, M mute, Z zoom, S series. Or use the phone as a remote:
+    numbers 0-9, M mute, Z zoom, V movies, S series, / search everything,
+    L go back to live, C subtitles, R start a movie over, Space pause.
+    Or use the phone as a remote:
     PC Settings -> Phone remote ON, then on the phone tap the remote icon.
+
+WHAT'S NEW IN THIS KIT
+  - Movies page, plus "Continue watching" for movies and series: they continue
+    where you stopped ("Start over" if you want the beginning).
+  - Next episode plays by itself after 10 seconds; finished ones get a check mark.
+  - Live delay fix: top-right shows LIVE, or how far behind you are. It catches up
+    by itself; press L (or tap the badge) to jump to live right away.
+  - Settings -> Live TV -> "Use HLS" if a channel keeps buffering.
+  - Subtitles (C key / CC button) when the movie has them.
+  - One search for channels, movies and series.
 
 UPDATING
   Run the new AmarTv-Setup.exe / install the new APK over the old one.

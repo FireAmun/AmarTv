@@ -9,17 +9,20 @@ import '../../core/theme.dart';
 import '../channels/channel_filter.dart';
 import '../channels/group_setup_page.dart';
 import '../channels/widgets.dart';
+import '../movies/movies_page.dart';
 import '../player/player_controller.dart';
 import '../player/player_view.dart';
+import '../player/track_pickers.dart';
 import '../playlist/channel.dart';
 import '../playlist/playlist_controller.dart';
 import '../remote/remote_page.dart';
+import '../search/search_page.dart';
 import '../series/series_page.dart';
 import '../settings/app_settings.dart';
 import '../settings/settings_page.dart';
 import '../xtream/xtream_api.dart';
 
-/// Phone layout: bottom navigation (All / Favorites / Recent / Series / Settings).
+/// Phone layout: bottom navigation (All / Favorites / Recent / Movies / Series / Settings).
 class PhoneHome extends ConsumerStatefulWidget {
   const PhoneHome({super.key, this.openSettingsOnStart = false});
   final bool openSettingsOnStart;
@@ -48,30 +51,43 @@ class _PhoneHomeState extends ConsumerState<PhoneHome> {
     }, fireImmediately: true);
   }
 
-  void _select(int index, bool hasSeries) {
-    // "Series" (when available) opens a page instead of switching tab.
-    if (hasSeries && index == 3) {
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => SeriesPage(onPlay: (ctx, media) => openPhonePlayer(ctx, ref, media)),
-      ));
-      return;
-    }
-    final tab = hasSeries && index > 3 ? index - 1 : index;
-    setState(() => _tab = tab);
-    if (tab < _settingsTab) {
-      ref.read(channelFilterProvider.notifier).setMode(ListMode.values[tab]);
+  /// Movies and Series open as pages; the other entries are tabs.
+  void _select(_Nav nav) {
+    void onPlay(BuildContext ctx, Channel media) => openPhonePlayer(ctx, ref, media);
+    switch (nav) {
+      case _Nav.movies:
+        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MoviesPage(onPlay: onPlay)));
+      case _Nav.series:
+        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SeriesPage(onPlay: onPlay)));
+      case _Nav.settings:
+        setState(() => _tab = _settingsTab);
+      case _Nav.all || _Nav.favorites || _Nav.recent:
+        setState(() => _tab = nav.index);
+        ref.read(channelFilterProvider.notifier).setMode(ListMode.values[nav.index]);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final warning = ref.read(appPathsProvider).warning;
-    final hasSeries = ref.watch(xtreamApiProvider) != null;
-    final selected = hasSeries && _tab == _settingsTab ? 4 : _tab;
+    final hasVod = ref.watch(xtreamApiProvider) != null;
+    final navs = [
+      _Nav.all, _Nav.favorites, _Nav.recent, //
+      if (hasVod) ...[_Nav.movies, _Nav.series],
+      _Nav.settings,
+    ];
+    final current = _tab == _settingsTab ? _Nav.settings : _Nav.values[_tab];
     return Scaffold(
       appBar: AppBar(
         title: Text(_tab == _settingsTab ? 'Settings' : 'AmarTv'),
         actions: [
+          IconButton(
+            tooltip: 'Search everything',
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => SearchPage(onPlay: (ctx, media) => openPhonePlayer(ctx, ref, media)),
+            )),
+          ),
           IconButton(
             tooltip: 'Use as remote for a PC',
             icon: const Icon(Icons.settings_remote_outlined),
@@ -86,18 +102,28 @@ class _PhoneHomeState extends ConsumerState<PhoneHome> {
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: selected,
-        onDestinationSelected: (i) => _select(i, hasSeries),
+        selectedIndex: navs.indexOf(current),
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+        onDestinationSelected: (i) => _select(navs[i]),
         destinations: [
-          const NavigationDestination(icon: Icon(Icons.live_tv_outlined), label: 'All'),
-          const NavigationDestination(icon: Icon(Icons.star_border_rounded), label: 'Favorites'),
-          const NavigationDestination(icon: Icon(Icons.history), label: 'Recent'),
-          if (hasSeries) const NavigationDestination(icon: Icon(Icons.video_library_outlined), label: 'Series'),
-          const NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
+          for (final n in navs) NavigationDestination(icon: Icon(n.icon), label: n.label),
         ],
       ),
     );
   }
+}
+
+enum _Nav {
+  all('All', Icons.live_tv_outlined),
+  favorites('Favorites', Icons.star_border_rounded),
+  recent('Recent', Icons.history),
+  movies('Movies', Icons.movie_outlined),
+  series('Series', Icons.video_library_outlined),
+  settings('Settings', Icons.settings_outlined);
+
+  const _Nav(this.label, this.icon);
+  final String label;
+  final IconData icon;
 }
 
 class _ChannelsTab extends ConsumerStatefulWidget {
@@ -340,6 +366,10 @@ class _PhonePlayerPageState extends ConsumerState<PhonePlayerPage> with WidgetsB
                               },
                             ),
                             IconButton(icon: const Icon(Icons.forward_30), onPressed: () => _seek(30)),
+                            IconButton(
+                              icon: const Icon(Icons.closed_caption_outlined),
+                              onPressed: () => showSubtitlePicker(context, ref),
+                            ),
                             IconButton(icon: const Icon(Icons.aspect_ratio), onPressed: _zoom),
                           ]
                         : [

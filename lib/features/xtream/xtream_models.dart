@@ -114,6 +114,25 @@ class SeriesItem {
   final String year;
 }
 
+class MovieItem {
+  const MovieItem({
+    required this.id,
+    required this.name,
+    required this.extension,
+    this.cover = '',
+    this.categoryId = '',
+    this.rating = '',
+    this.year = '',
+  });
+  final int id;
+  final String name;
+  final String extension;
+  final String cover;
+  final String categoryId;
+  final String rating;
+  final String year;
+}
+
 class Episode {
   const Episode({
     required this.id,
@@ -155,6 +174,30 @@ List<SeriesItem> parseSeriesList(Object? json) {
       categoryId: '${s['category_id'] ?? ''}',
       plot: '${s['plot'] ?? ''}'.trim(),
       year: '${s['releaseDate'] ?? s['release_date'] ?? s['year'] ?? ''}'.trim(),
+    ));
+  }
+  return out;
+}
+
+/// `get_vod_streams` -> movies. The year comes from a "(2024)" name suffix
+/// when the panel has no year field.
+List<MovieItem> parseMovies(Object? json) {
+  final out = <MovieItem>[];
+  for (final m in _items(json)) {
+    if (m is! Map) continue;
+    final id = _int(m['stream_id']);
+    final name = '${m['name'] ?? ''}'.trim();
+    if (id == null || name.isEmpty) continue;
+    final ext = '${m['container_extension'] ?? ''}'.trim();
+    final rating = '${m['rating'] ?? ''}'.trim();
+    out.add(MovieItem(
+      id: id,
+      name: name,
+      extension: ext.isEmpty || ext == 'null' ? 'mp4' : ext,
+      cover: '${m['stream_icon'] ?? ''}'.trim(),
+      categoryId: '${m['category_id'] ?? ''}',
+      rating: rating == '0' || rating == 'null' ? '' : rating,
+      year: RegExp(r'\((\d{4})\)\s*$').firstMatch(name)?.group(1) ?? '${m['year'] ?? ''}'.trim(),
     ));
   }
   return out;

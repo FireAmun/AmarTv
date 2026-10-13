@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/log.dart';
@@ -31,7 +32,10 @@ class XtreamApi {
 
   void close() => _dio.close(force: true);
 
-  Future<Object?> _get(String? action, [Map<String, String> extra = const {}]) async {
+  Future<Object?> _get(String? action, [Map<String, String> extra = const {}]) async =>
+      jsonDecode(await _getRaw(action, extra));
+
+  Future<String> _getRaw(String? action, [Map<String, String> extra = const {}]) async {
     if (_running >= _maxParallel) {
       final slot = Completer<void>();
       _waiting.add(slot);
@@ -44,7 +48,7 @@ class XtreamApi {
         ...extra,
       });
       final res = await _dio.getUri<String>(uri);
-      return jsonDecode(res.data ?? 'null');
+      return res.data ?? 'null';
     } finally {
       _running--;
       if (_waiting.isNotEmpty) _waiting.removeFirst().complete();
@@ -56,9 +60,18 @@ class XtreamApi {
   Future<List<EpgProgram>> shortEpg(int streamId, {int limit = 4}) async =>
       parseShortEpg(await _get('get_short_epg', {'stream_id': '$streamId', 'limit': '$limit'}));
 
+  Future<List<SeriesCategory>> movieCategories() async => parseCategories(await _get('get_vod_categories'));
+
+  /// Big lists are decoded in a background isolate (no UI freeze).
+  Future<List<MovieItem>> movies() async =>
+      compute((String raw) => parseMovies(jsonDecode(raw)), await _getRaw('get_vod_streams'));
+
+  String movieUrl(MovieItem m) => login.movieUrl(m.id, m.extension);
+
   Future<List<SeriesCategory>> seriesCategories() async => parseCategories(await _get('get_series_categories'));
 
-  Future<List<SeriesItem>> seriesList() async => parseSeriesList(await _get('get_series'));
+  Future<List<SeriesItem>> seriesList() async =>
+      compute((String raw) => parseSeriesList(jsonDecode(raw)), await _getRaw('get_series'));
 
   Future<List<Episode>> seriesEpisodes(int seriesId) async =>
       parseSeriesEpisodes(await _get('get_series_info', {'series_id': '$seriesId'}));
